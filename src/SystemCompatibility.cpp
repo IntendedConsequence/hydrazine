@@ -11,23 +11,27 @@
 // Hydrazine includes
 #include <hydrazine/SystemCompatibility.h>
 
-#if __APPLE__
-	#include <sys/types.h>
-	#include <sys/sysctl.h>
-#elif __GNUC__
-	#include <GL/glx.h>
-	#include <unistd.h> 
-	#include <sys/sysinfo.h>
-	#include <cxxabi.h>
-#else 
-	#error "Unknown system/compiler (APPLE and GNUC are supported)."
+#if defined(__APPLE__)
+    #include <sys/types.h>
+    #include <sys/sysctl.h>
+#elif defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
+    // Windows / MinGW
+    #include <windows.h>
+    // Optional: for demangling if you really need it
+    // #include <dbghelp.h>   // UnDecorateSymbolName
+#else
+    // Linux / other Unix
+    #include <GL/glx.h>
+    #include <unistd.h>
+    #include <sys/sysinfo.h>
+    #include <cxxabi.h>
 #endif
 
 namespace hydrazine
 {
 	unsigned int getHardwareThreadCount()
 	{
-	#if __APPLE__
+	#if defined(__APPLE__)
 		int nm[2];
 	    size_t len = 4;
 	    uint32_t count;
@@ -46,7 +50,11 @@ namespace hydrazine
 	        }
 	    }
 	    return count;
-	#elif __GNUC__
+	#elif defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
+		SYSTEM_INFO sysinfo;
+		GetSystemInfo(&sysinfo);
+		return sysinfo.dwNumberOfProcessors;
+	#else
 		return sysconf(_SC_NPROCESSORS_ONLN);
 	#endif
 	}
@@ -58,7 +66,7 @@ namespace hydrazine
 	
 	long long unsigned int getFreePhysicalMemory()
 	{
-		#if __APPLE__
+		#if defined(__APPLE__)
 			int mib[2]; 
 			uint64_t physical_memory; 
 			size_t length; 
@@ -68,17 +76,24 @@ namespace hydrazine
 			length = sizeof(uint64_t); 
 			sysctl(mib, 2, &physical_memory, &length, NULL, 0); 
 			return physical_memory;
-		#elif __GNUC__
+		#elif defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
+			MEMORYSTATUSEX status;
+			status.dwLength = sizeof(status);
+			GlobalMemoryStatusEx(&status);
+			return status.ullAvailPhys;
+		#else
 			return get_avphys_pages() * getpagesize();
 		#endif
 	}
 	
 	bool isAnOpenGLContextAvailable()
 	{
-		#if __APPLE__
+		#if defined(__APPLE__)
 			// TODO fill this in
 			return false;
-		#elif __GNUC__
+		#elif defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
+			return wglGetCurrentContext() != nullptr;
+		#else
 			GLXContext openglContext = glXGetCurrentContext();
 			return (openglContext != 0);
 		#endif
@@ -91,10 +106,13 @@ namespace hydrazine
 	
 	std::string demangleCXXString(const std::string& string)
 	{
-		#if __APPLE__
+		#if defined(__APPLE__)
 			// TODO fill this in
 			return string;
-		#elif __GNUC__
+		#elif defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
+			// Simple stub - real demangling on Windows needs DbgHelp
+			return string;
+		#else
 			int status = 0;
 			std::string name = abi::__cxa_demangle(string.c_str(),
 				0, 0, &status);
